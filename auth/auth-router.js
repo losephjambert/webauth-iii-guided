@@ -1,34 +1,45 @@
-const router = require("express").Router();
-const bcrypt = require("bcryptjs");
-const jwt = require("jsonwebtoken");
+const router = require('express').Router();
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
 
-const Users = require("../users/users-model.js");
+const Users = require('../users/users-model.js');
+const { validateUser } = require('../users/users-helpers.js');
 
 // for endpoints beginning with /api/auth
-router.post("/register", (req, res) => {
+router.post('/register', (req, res) => {
   let user = req.body;
-  const hash = bcrypt.hashSync(user.password, 10); // 2 ^ n
-  user.password = hash;
-
-  Users.add(user)
-    .then(saved => {
-      res.status(201).json(saved);
-    })
-    .catch(error => {
-      if (error.code === "SQLITE_CONSTRAINT") {
-        res
-          .status(401)
-          .json({
+  // always validate the data before sending it to the db
+  /**
+   * What makes a user "valid"?
+   * Validating data is business logic
+   */
+  const validateResult = validateUser(user);
+  if (validateResult.isSuccessful) {
+    const hash = bcrypt.hashSync(user.password, 10); // 2 ^ n
+    user.password = hash;
+    Users.add(user)
+      .then(saved => {
+        res.status(201).json(saved);
+      })
+      .catch(error => {
+        if (error.code === 'SQLITE_CONSTRAINT') {
+          res.status(401).json({
             message: `An account with that username already exists`,
-            error
+            error,
           });
-      } else {
-        res.status(500).json(error);
-      }
+        } else {
+          res.status(500).json(error);
+        }
+      });
+  } else {
+    res.status(400).json({
+      message: `Invalid user information`,
+      errors: validateResult.errors,
     });
+  }
 });
 
-router.post("/login", (req, res) => {
+router.post('/login', (req, res) => {
   let { username, password } = req.body;
 
   Users.findBy({ username })
@@ -38,13 +49,12 @@ router.post("/login", (req, res) => {
         // produce a token
         const token = getJwtToken(user.username);
         // send the token to the client
-
         res.status(200).json({
           message: `Welcome ${user.username}!`,
-          token
+          token,
         });
       } else {
-        res.status(401).json({ message: "Invalid Credentials" });
+        res.status(401).json({ message: 'Invalid Credentials' });
       }
     })
     .catch(error => {
@@ -55,11 +65,11 @@ router.post("/login", (req, res) => {
 function getJwtToken(username) {
   const payload = {
     username,
-    role: "student" //this will come from the db. this is just an example
+    role: 'student', //this will come from the db. this is just an example
   };
-  const secret = process.env.JWT_SECRET || "is it secret is it safe?";
+  const secret = process.env.JWT_SECRET || 'is it secret is it safe?';
   const options = {
-    expiresIn: "1d"
+    expiresIn: '1d',
   };
 
   return jwt.sign(payload, secret, options);

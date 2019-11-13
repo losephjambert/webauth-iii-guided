@@ -11,6 +11,7 @@ module.exports = (req, res, next) => {
         // bad panda, token has been tampered with
         res.status(401).json({ message: "Invalid Credentials" });
       } else {
+        req.decodedToken = decodedToken;
         next();
       }
     });
